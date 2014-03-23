@@ -4,6 +4,21 @@ local kQuote = "'"
 local kNil = { tag = 'nil', data = 'nil' }
 
 
+function safeCar(obj)
+  if obj.tag == 'cons' then
+    return obj.car
+  end
+  return kNil
+end
+
+function safeCdr(obj)
+  if obj.tag == 'cons' then
+    return obj.cdr
+  end
+  return kNil
+end
+
+
 function makeError(str)
   return { tag = 'error', data = str }
 end
@@ -33,6 +48,13 @@ function makeSubr(fn)
   return { tag = 'subr', data = fn }
 end
 
+function makeExpr(args, env)
+  return { tag = 'expr',
+           args = safeCar(args),
+           body = safeCdr(args),
+           env = env }
+end
+
 
 function nreverse(lst)
   local ret = kNil
@@ -43,6 +65,16 @@ function nreverse(lst)
     lst = tmp
   end
   return ret
+end
+
+function pairlis(lst1, lst2)
+  local ret = kNil
+  while lst1.tag == 'cons' and lst2.tag == 'cons' do
+    ret = makeCons(makeCons(lst1.car, lst2.car), ret)
+    lst1 = lst1.cdr
+    lst2 = lst2.cdr
+  end
+  return nreverse(ret)
 end
 
 
@@ -208,20 +240,6 @@ function addToEnv(sym, val, env)
 end
 
 
-function safeCar(obj)
-  if obj.tag == 'cons' then
-    return obj.car
-  end
-  return kNil
-end
-
-function safeCdr(obj)
-  if obj.tag == 'cons' then
-    return obj.cdr
-  end
-  return kNil
-end
-
 local evlis = nil
 local apply = nil
 
@@ -245,6 +263,8 @@ function eval(obj, env)
       return eval(safeCar(safeCdr(safeCdr(args))), env)
     end
     return eval(safeCar(safeCdr(args)), env)
+  elseif op == makeSym('lambda') then
+    return makeExpr(args, env)
   end
   return apply(eval(op, env), evlis(args, env), env)
 end
@@ -262,6 +282,15 @@ evlis = function (lst, env)
   return nreverse(ret)
 end
 
+function progn(body, env)
+  local ret = kNil
+  while body.tag == 'cons' do
+    ret = eval(body.car, env)
+    body = body.cdr
+  end
+  return ret
+end
+
 apply = function (fn, args, env)
   if fn.tag == 'error' then
     return fn
@@ -269,6 +298,8 @@ apply = function (fn, args, env)
     return args
   elseif fn.tag == 'subr' then
     return fn.data(args)
+  elseif fn.tag == 'expr' then
+    return progn(fn.body, makeCons(pairlis(fn.args, args), fn.env))
   end
   return makeError('noimpl')
 end
@@ -282,10 +313,15 @@ function subrCdr(args)
   return safeCdr(safeCar(args))
 end
 
+function subrCons(args)
+  return makeCons(safeCar(args), safeCar(safeCdr(args)))
+end
+
 
 local g_env = makeCons(kNil, kNil)
 addToEnv(makeSym('car'), makeSubr(subrCar), g_env)
 addToEnv(makeSym('cdr'), makeSubr(subrCdr), g_env)
+addToEnv(makeSym('cons'), makeSubr(subrCons), g_env)
 while true do
   x = io.read()
   if x then
