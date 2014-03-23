@@ -1,6 +1,7 @@
 local kLPar = '('
 local kRPar = ')'
 local kQuote = "'"
+local kNil = { tag = 'nil', data = 'nil' }
 
 
 function makeError(str)
@@ -20,6 +21,23 @@ end
 function makeNum(num)
   return { tag = 'num', data = num }
 end
+
+function makeCons(a, d)
+  return { tag = 'cons', car = a, cdr = d }
+end
+
+
+function nreverse(lst)
+  local ret = kNil
+  while lst.tag == 'cons' do
+    local tmp = lst.cdr
+    lst.cdr = ret
+    ret = lst
+    lst = tmp
+  end
+  return ret
+end
+
 
 function isSpace(c)
   return c == ' ' or c == '\t' or c == '\r' or c == '\n'
@@ -75,27 +93,32 @@ function makeNumOrSym(str)
 end
 
 function readAtom(str)
+  local next = ''
   for i = 1, string.len(str) do
     if isDelimiter(string.sub(str, i, i)) then
+      next = string.sub(str, i)
       str = string.sub(str, 1, i - 1)
       break
     end
   end
-  return makeNumOrSym(str)
+  return makeNumOrSym(str), next
 end
 
+local readList = nil
+
 function read(str)
-  str = skipSpaces(str)
+  local str = skipSpaces(str)
   if str == '' then
-    return makeError('empty input')
+    return makeError('empty input'), ''
   else
     c = string.sub(str, 1, 1)
     if c == kRPar then
-      return makeError(string.format('invalid syntax: %s', str))
+      return makeError(string.format('invalid syntax: %s', str)), ''
     elseif c == kLPar then
-      return makeError('noimpl')
+      return readList(string.sub(str, 2))
     elseif c == kQuote then
-      return makeError('noimpl')
+      local elm, next = read(string.sub(str, 2))
+      return makeCons(makeSym('quote'), makeCons(elm, kNil)), next
     else
       return readAtom(str)
     end
@@ -103,16 +126,59 @@ function read(str)
   return str
 end
 
+readList = function (str)
+  local ret = kNil
+  while true do
+    str = skipSpaces(str)
+    if str == '' then
+      return makeError('unfinished parenthesis'), ''
+    elseif string.sub(str, 1, 1) == kRPar then
+      break
+    end
+    local elm, next = read(str)
+    if elm.tag == 'error' then
+      return elm
+    end
+    ret = makeCons(elm, ret)
+    str = next
+  end
+  return nreverse(ret), string.sub(str, 2)
+end
+
+local printList = nil
+
 function printObj(obj)
   if type(obj) ~= 'table' then
     return string.format('non-lisp object: %s', obj)
   end
-  if obj.tag == 'num' or obj.tag == 'sym' then
+  if obj.tag == 'num' or obj.tag == 'sym' or obj.tag == 'nil' then
     return tostring(obj.data)
   elseif obj.tag == 'error' then
     return string.format('<error: %s>', obj.data)
+  elseif obj.tag == 'cons' then
+    return printList(obj)
   end
   return string.format('unknown tag: %s', obj.tag)
+end
+
+printList = function (obj)
+  local ret = ''
+  local first = true
+  while obj.tag == 'cons' do
+    if first then
+      ret = printObj(obj.car)
+      first = false
+    else
+      ret = string.format('%s %s', ret, printObj(obj.car))
+    end
+    obj = obj.cdr
+  end
+  if obj.tag == 'nil' then
+    ret = string.format('(%s)', ret)
+  else
+    ret = string.format('(%s . %s)', ret, printObj(obj))
+  end
+  return ret
 end
 
 while true do
