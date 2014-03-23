@@ -181,10 +181,44 @@ printList = function (obj)
   return ret
 end
 
+
+function findVar(sym, env)
+  while env.tag == 'cons' do
+    alist = env.car
+    while alist.tag == 'cons' do
+      if alist.car.car == sym then
+        return alist.car
+      end
+      alist = alist.cdr
+    end
+    env = env.cdr
+  end
+  return kNil
+end
+
+function addToEnv(sym, val, env)
+  env.car = makeCons(makeCons(sym, val), env.car)
+end
+
+function eval(obj, env)
+  if obj.tag == 'nil' or obj.tag == 'num' or obj.tag == 'error' then
+    return obj
+  elseif obj.tag == 'sym' then
+    local bind = findVar(obj, env)
+    if bind == kNil then
+       return makeError(string.format('%s has no value', obj.data))
+    end
+    return bind.cdr
+  end
+  return makeError('noimpl')
+end
+
+
+local g_env = makeCons(kNil, kNil)
 while true do
   x = io.read()
   if x then
-    print(printObj(read(x)))
+    print(printObj(eval(read(x), g_env)))
   else
     break
   end
