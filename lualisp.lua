@@ -272,6 +272,16 @@ function eval(obj, env)
     local sym = safeCar(args)
     addToEnv(sym, expr, g_env)
     return sym
+  elseif op == makeSym('setq') then
+    local val = eval(safeCar(safeCdr(args)), env)
+    local sym = safeCar(args)
+    local bind = findVar(sym, env)
+    if bind == kNil then
+      addToEnv(sym, val, g_env)
+    else
+      bind.cdr = val
+    end
+    return val
   end
   return apply(eval(op, env), evlis(args, env), env)
 end
