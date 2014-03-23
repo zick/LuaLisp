@@ -10,6 +10,9 @@ end
 
 local sym_table = {}
 function makeSym(str)
+  if str == 'nil' then
+    return kNil
+  end
   local s = sym_table[str]
   if not(s) then
     s = { tag = 'sym', data = str }
@@ -209,6 +212,17 @@ function eval(obj, env)
        return makeError(string.format('%s has no value', obj.data))
     end
     return bind.cdr
+  end
+
+  local op = obj.car
+  local args = obj.cdr
+  if op == makeSym('quote') then
+    return args.car
+  elseif op == makeSym('if') then
+    if eval(args.car, env) == kNil then
+      return eval(args.cdr.cdr.car, env)
+    end
+    return eval(args.cdr.car, env)
   end
   return makeError('noimpl')
 end
