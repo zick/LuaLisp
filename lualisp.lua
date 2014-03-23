@@ -235,6 +235,8 @@ function findVar(sym, env)
   return kNil
 end
 
+local g_env = makeCons(kNil, kNil)
+
 function addToEnv(sym, val, env)
   env.car = makeCons(makeCons(sym, val), env.car)
 end
@@ -265,6 +267,11 @@ function eval(obj, env)
     return eval(safeCar(safeCdr(args)), env)
   elseif op == makeSym('lambda') then
     return makeExpr(args, env)
+  elseif op == makeSym('defun') then
+    local expr = makeExpr(safeCdr(args), env)
+    local sym = safeCar(args)
+    addToEnv(sym, expr, g_env)
+    return sym
   end
   return apply(eval(op, env), evlis(args, env), env)
 end
@@ -318,7 +325,6 @@ function subrCons(args)
 end
 
 
-local g_env = makeCons(kNil, kNil)
 addToEnv(makeSym('car'), makeSubr(subrCar), g_env)
 addToEnv(makeSym('cdr'), makeSubr(subrCdr), g_env)
 addToEnv(makeSym('cons'), makeSubr(subrCons), g_env)
