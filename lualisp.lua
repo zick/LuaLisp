@@ -196,6 +196,10 @@ function printObj(obj)
     return string.format('<error: %s>', obj.data)
   elseif obj.tag == 'cons' then
     return printList(obj)
+  elseif obj.tag == 'subr' then
+    return '<subr>'
+  elseif obj.tag == 'expr' then
+    return '<expr>'
   end
   return string.format('unknown tag: %s', obj.tag)
 end
@@ -334,11 +338,88 @@ function subrCons(args)
   return makeCons(safeCar(args), safeCar(safeCdr(args)))
 end
 
+function subrEq(args)
+  local x = safeCar(args)
+  local y = safeCar(safeCdr(args))
+  if x.tag == 'num' and y.tag == 'num' then
+    if x.data == y.data then
+      return makeSym('t')
+    end
+    return kNil
+  elseif x == y then
+    return makeSym('t')
+  end
+  return kNil
+end
+
+function subrAtom(args)
+  if safeCar(args).tag == 'cons' then
+    return kNil
+  end
+  return makeSym('t')
+end
+
+function subrNumberp(args)
+  if safeCar(args).tag == 'num' then
+    return makeSym('t')
+  end
+  return kNil
+end
+
+function subrSymbolp(args)
+  if safeCar(args).tag == 'sym' then
+    return makeSym('t')
+  end
+  return kNil
+end
+
+function subrAddOrMul(fn, init_val)
+  return function (args)
+    ret = init_val
+    while args.tag == 'cons' do
+      if args.car.tag ~= 'num' then
+        return makeError('wrong type')
+      end
+      ret = fn(ret, args.car.data)
+      args = args.cdr
+    end
+    return makeNum(ret)
+  end
+end
+local subrAdd = subrAddOrMul(function(x,y) return x + y end, 0)
+local subrMul = subrAddOrMul(function(x,y) return x * y end, 1)
+
+function subrSubOrDivOrMod(fn)
+  return function (args)
+    local x = safeCar(args)
+    local y = safeCar(safeCdr(args))
+    if x.tag ~= 'num' or y.tag ~= 'num' then
+      return makeError('wrong type')
+    end
+    return makeNum(fn(x.data, y.data))
+  end
+end
+local subrSub = subrSubOrDivOrMod(function(x,y) return x - y end)
+local subrDiv = subrSubOrDivOrMod(function(x,y) return x / y end)
+local subrMod = subrSubOrDivOrMod(function(x,y) return x % y end)
+
 
 addToEnv(makeSym('car'), makeSubr(subrCar), g_env)
 addToEnv(makeSym('cdr'), makeSubr(subrCdr), g_env)
 addToEnv(makeSym('cons'), makeSubr(subrCons), g_env)
+addToEnv(makeSym('eq'), makeSubr(subrEq), g_env)
+addToEnv(makeSym('atom'), makeSubr(subrAtom), g_env)
+addToEnv(makeSym('numberp'), makeSubr(subrNumberp), g_env)
+addToEnv(makeSym('symbolp'), makeSubr(subrSymbolp), g_env)
+addToEnv(makeSym('+'), makeSubr(subrAdd), g_env)
+addToEnv(makeSym('*'), makeSubr(subrMul), g_env)
+addToEnv(makeSym('-'), makeSubr(subrSub), g_env)
+addToEnv(makeSym('/'), makeSubr(subrDiv), g_env)
+addToEnv(makeSym('mod'), makeSubr(subrMod), g_env)
+addToEnv(makeSym('t'), makeSym('t'), g_env)
+
 while true do
+  io.write('> ')
   x = io.read()
   if x then
     print(printObj(eval(read(x), g_env)))
