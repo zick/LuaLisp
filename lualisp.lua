@@ -29,6 +29,10 @@ function makeCons(a, d)
   return { tag = 'cons', car = a, cdr = d }
 end
 
+function makeSubr(fn)
+  return { tag = 'subr', data = fn }
+end
+
 
 function nreverse(lst)
   local ret = kNil
@@ -203,6 +207,24 @@ function addToEnv(sym, val, env)
   env.car = makeCons(makeCons(sym, val), env.car)
 end
 
+
+function safeCar(obj)
+  if obj.tag == 'cons' then
+    return obj.car
+  end
+  return kNil
+end
+
+function safeCdr(obj)
+  if obj.tag == 'cons' then
+    return obj.cdr
+  end
+  return kNil
+end
+
+local evlis = nil
+local apply = nil
+
 function eval(obj, env)
   if obj.tag == 'nil' or obj.tag == 'num' or obj.tag == 'error' then
     return obj
@@ -214,21 +236,56 @@ function eval(obj, env)
     return bind.cdr
   end
 
-  local op = obj.car
-  local args = obj.cdr
+  local op = safeCar(obj)
+  local args = safeCdr(obj)
   if op == makeSym('quote') then
-    return args.car
+    return safeCar(args)
   elseif op == makeSym('if') then
-    if eval(args.car, env) == kNil then
-      return eval(args.cdr.cdr.car, env)
+    if eval(safeCar(args), env) == kNil then
+      return eval(safeCar(safeCdr(safeCdr(args))), env)
     end
-    return eval(args.cdr.car, env)
+    return eval(safeCar(safeCdr(args)), env)
+  end
+  return apply(eval(op, env), evlis(args, env), env)
+end
+
+evlis = function (lst, env)
+  local ret = kNil
+  while lst.tag == 'cons' do
+    elm = eval(lst.car, env)
+    if elm.tag == 'error' then
+      return elm
+    end
+    ret = makeCons(elm, ret)
+    lst = lst.cdr
+  end
+  return nreverse(ret)
+end
+
+apply = function (fn, args, env)
+  if fn.tag == 'error' then
+    return fn
+  elseif args.tag == 'error' then
+    return args
+  elseif fn.tag == 'subr' then
+    return fn.data(args)
   end
   return makeError('noimpl')
 end
 
 
+function subrCar(args)
+  return safeCar(safeCar(args))
+end
+
+function subrCdr(args)
+  return safeCdr(safeCar(args))
+end
+
+
 local g_env = makeCons(kNil, kNil)
+addToEnv(makeSym('car'), makeSubr(subrCar), g_env)
+addToEnv(makeSym('cdr'), makeSubr(subrCdr), g_env)
 while true do
   x = io.read()
   if x then
