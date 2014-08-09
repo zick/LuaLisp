@@ -42,6 +42,9 @@ local sym_if = makeSym('if')
 local sym_lambda = makeSym('lambda')
 local sym_defun = makeSym('defun')
 local sym_setq = makeSym('setq')
+local sym_loop = makeSym('loop')
+local sym_return = makeSym('return')
+local loop_val = kNil
 
 function makeNum(num)
   return { tag = 'num', data = num }
@@ -255,6 +258,7 @@ end
 
 local evlis = nil
 local apply = nil
+local loop = nil
 
 function eval(obj, env)
   if obj.tag == 'nil' or obj.tag == 'num' or obj.tag == 'error' then
@@ -272,7 +276,10 @@ function eval(obj, env)
   if op == sym_quote then
     return safeCar(args)
   elseif op == sym_if then
-    if eval(safeCar(args), env) == kNil then
+    local c = eval(safeCar(args), env)
+    if c.tag == 'error' then
+      return c
+    elseif c == kNil then
       return eval(safeCar(safeCdr(safeCdr(args))), env)
     end
     return eval(safeCar(safeCdr(args)), env)
@@ -285,6 +292,9 @@ function eval(obj, env)
     return sym
   elseif op == sym_setq then
     local val = eval(safeCar(safeCdr(args)), env)
+    if val.tag == 'error' then
+      return val
+    end
     local sym = safeCar(args)
     local bind = findVar(sym, env)
     if bind == kNil then
@@ -293,6 +303,11 @@ function eval(obj, env)
       bind.cdr = val
     end
     return val
+  elseif op == sym_loop then
+    return loop(args, env)
+  elseif op == sym_return then
+    loop_val = eval(safeCar(args), env)
+    return makeError('')
   end
   return apply(eval(op, env), evlis(args, env), env)
 end
@@ -314,9 +329,24 @@ function progn(body, env)
   local ret = kNil
   while body.tag == 'cons' do
     ret = eval(body.car, env)
+    if ret.tag == 'error' then
+      return ret
+    end
     body = body.cdr
   end
   return ret
+end
+
+loop = function (body, env)
+  while true do
+    local ret = progn(body, env)
+    if ret.tag == 'error' then
+      if ret.data == '' then
+        return loop_val
+      end
+      return ret
+    end
+  end
 end
 
 apply = function (fn, args, env)
