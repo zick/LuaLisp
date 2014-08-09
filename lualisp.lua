@@ -36,6 +36,13 @@ function makeSym(str)
   return s
 end
 
+local sym_t = makeSym('t')
+local sym_quote = makeSym('quote')
+local sym_if = makeSym('if')
+local sym_lambda = makeSym('lambda')
+local sym_defun = makeSym('defun')
+local sym_setq = makeSym('setq')
+
 function makeNum(num)
   return { tag = 'num', data = num }
 end
@@ -157,7 +164,7 @@ function read(str)
       return readList(string.sub(str, 2))
     elseif c == kQuote then
       local elm, next = read(string.sub(str, 2))
-      return makeCons(makeSym('quote'), makeCons(elm, kNil)), next
+      return makeCons(sym_quote, makeCons(elm, kNil)), next
     else
       return readAtom(str)
     end
@@ -262,21 +269,21 @@ function eval(obj, env)
 
   local op = safeCar(obj)
   local args = safeCdr(obj)
-  if op == makeSym('quote') then
+  if op == sym_quote then
     return safeCar(args)
-  elseif op == makeSym('if') then
+  elseif op == sym_if then
     if eval(safeCar(args), env) == kNil then
       return eval(safeCar(safeCdr(safeCdr(args))), env)
     end
     return eval(safeCar(safeCdr(args)), env)
-  elseif op == makeSym('lambda') then
+  elseif op == sym_lambda then
     return makeExpr(args, env)
-  elseif op == makeSym('defun') then
+  elseif op == sym_defun then
     local expr = makeExpr(safeCdr(args), env)
     local sym = safeCar(args)
     addToEnv(sym, expr, g_env)
     return sym
-  elseif op == makeSym('setq') then
+  elseif op == sym_setq then
     local val = eval(safeCar(safeCdr(args)), env)
     local sym = safeCar(args)
     local bind = findVar(sym, env)
@@ -343,11 +350,11 @@ function subrEq(args)
   local y = safeCar(safeCdr(args))
   if x.tag == 'num' and y.tag == 'num' then
     if x.data == y.data then
-      return makeSym('t')
+      return sym_t
     end
     return kNil
   elseif x == y then
-    return makeSym('t')
+    return sym_t
   end
   return kNil
 end
@@ -356,19 +363,19 @@ function subrAtom(args)
   if safeCar(args).tag == 'cons' then
     return kNil
   end
-  return makeSym('t')
+  return sym_t
 end
 
 function subrNumberp(args)
   if safeCar(args).tag == 'num' then
-    return makeSym('t')
+    return sym_t
   end
   return kNil
 end
 
 function subrSymbolp(args)
   if safeCar(args).tag == 'sym' then
-    return makeSym('t')
+    return sym_t
   end
   return kNil
 end
@@ -416,7 +423,7 @@ addToEnv(makeSym('*'), makeSubr(subrMul), g_env)
 addToEnv(makeSym('-'), makeSubr(subrSub), g_env)
 addToEnv(makeSym('/'), makeSubr(subrDiv), g_env)
 addToEnv(makeSym('mod'), makeSubr(subrMod), g_env)
-addToEnv(makeSym('t'), makeSym('t'), g_env)
+addToEnv(sym_t, sym_t, g_env)
 
 while true do
   io.write('> ')
